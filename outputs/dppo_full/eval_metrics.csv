@@ -1,2 +1,2 @@
-eval_acc,eval_parse_rate,eval_reward,step,gpu_hours,cpu_load_1m,cpu_rss_gb,gpu_memory_allocated_gb,gpu_memory_reserved_gb,gpu_memory_peak_gb
-0.11,1.0,0.1990000000000002,100,0.15760606759124332,1.0,0.0018737874925136566,6.315505504608154,41.16015625,12.696959972381592
+step,eval_acc,eval_parse_rate,eval_reward,gpu_hours,cpu_load_1m,cpu_rss_gb,gpu_memory_allocated_gb,gpu_memory_reserved_gb,gpu_memory_peak_gb
+100.0,0.12,1.0,0.20800000000000027,0.0,0.98779296875,0.0018369406461715698,0.935849666595459,1.037109375,0.9915666580200195

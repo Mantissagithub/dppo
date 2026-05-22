@@ -42,10 +42,14 @@ def load_run_frames(outputs_root, run_name):
         train_df = load_csv(run_dir / "train_metrics.csv")
         eval_df = load_csv(run_dir / "eval_metrics.csv")
 
-    if eval_df.empty:
-        eval_dir_df = load_csv(outputs_root / f"{run_name}_eval" / "eval_metrics.csv")
-        if not eval_dir_df.empty:
-            eval_df = eval_dir_df
+    train_df = train_df.copy()
+    eval_df = eval_df.copy()
+    if "mean_topk_divergence" in train_df.columns and "mean_divergence" not in train_df.columns:
+        train_df = train_df.rename(columns={"mean_topk_divergence": "mean_divergence"})
+
+    eval_dir_df = load_csv(outputs_root / f"{run_name}_eval" / "eval_metrics.csv")
+    if not eval_dir_df.empty:
+        eval_df = eval_dir_df
 
     if not eval_df.empty and "step" in eval_df.columns:
         if eval_df["step"].nunique() == 1 and float(eval_df["step"].iloc[0]) == 0.0 and not train_df.empty:
