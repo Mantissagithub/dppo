@@ -26,6 +26,7 @@ class DPPOTrainer:
         set_seed(self.config["seed"])
         self.output_dir.mkdir(parents=True, exist_ok=True)
         logger = ExperimentLogger(self.output_dir)
+        self.config["store_rollout_logits"] = True
         model, tokenizer, accelerator, _ = load_model_and_tokenizer(self.config)
         optimizer = torch.optim.AdamW(model.parameters(), lr=self.config["learning_rate"])
         model, optimizer = accelerator.prepare(model, optimizer)

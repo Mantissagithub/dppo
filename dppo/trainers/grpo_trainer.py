@@ -35,6 +35,7 @@ class GRPOTrainer:
         step = 0
         timer = Timer()
         generations = self.config["num_generations"]
+        update_batch_size = self.config.get("grpo_update_batch_size", self.config["batch_size"] * generations)
         model.train()
         for _ in range(self.config["num_epochs"]):
             for start in tqdm(range(0, len(train_examples), self.config["batch_size"]), desc="grpo"):
@@ -55,21 +56,43 @@ class GRPOTrainer:
                 advantages = ((rewards - group_mean) / (group_std + 1e-8)).reshape(-1)
                 response_length = rollout["response_length"]
                 for _ in range(self.config["grpo_epochs"]):
-                    outputs = model(
-                        input_ids=rollout["sequences"],
-                        attention_mask=rollout["attention_mask"],
-                    )
-                    new_logprobs = rollout["gather_logprobs"](outputs.logits)
-                    entropy = rollout["entropy_from_logits"](outputs.logits)
-                    loss, metrics = grpo_loss(
-                        new_logprobs=new_logprobs,
-                        old_logprobs=rollout["logprobs"].detach(),
-                        advantages=advantages,
-                        token_mask=rollout["token_mask"],
-                        clip_range=self.config["clip_range"],
-                        entropy=entropy,
-                    )
-                    accelerator.backward(loss / self.config["gradient_accumulation_steps"])
+                    chunk_losses = []
+                    chunk_metrics = []
+                    total_examples = rollout["sequences"].size(0)
+                    for chunk_start in range(0, total_examples, update_batch_size):
+                        chunk_end = chunk_start + update_batch_size
+                        chunk_sequences = rollout["sequences"][chunk_start:chunk_end]
+                        chunk_attention_mask = rollout["attention_mask"][chunk_start:chunk_end]
+                        chunk_labels = rollout["labels"][chunk_start:chunk_end]
+                        chunk_old_logprobs = rollout["logprobs"][chunk_start:chunk_end].detach()
+                        chunk_token_mask = rollout["token_mask"][chunk_start:chunk_end]
+                        chunk_advantages = advantages[chunk_start:chunk_end]
+
+                        outputs = model(
+                            input_ids=chunk_sequences,
+                            attention_mask=chunk_attention_mask,
+                        )
+                        shifted_logits = outputs.logits[:, :-1, :]
+                        new_logprobs = torch.log_softmax(shifted_logits, dim=-1).gather(
+                            dim=-1,
+                            index=chunk_labels.unsqueeze(-1),
+                        ).squeeze(-1)
+                        probs = torch.softmax(shifted_logits, dim=-1)
+                        entropy = -(probs * torch.log_softmax(shifted_logits, dim=-1)).sum(dim=-1)
+                        loss, metrics = grpo_loss(
+                            new_logprobs=new_logprobs,
+                            old_logprobs=chunk_old_logprobs,
+                            advantages=chunk_advantages,
+                            token_mask=chunk_token_mask,
+                            clip_range=self.config["clip_range"],
+                            entropy=entropy,
+                        )
+                        scale = chunk_sequences.size(0) / total_examples
+                        accelerator.backward((loss * scale) / self.config["gradient_accumulation_steps"])
+                        chunk_losses.append(float(loss.detach().cpu()))
+                        chunk_metrics.append(metrics)
+                        del outputs, new_logprobs, entropy, loss
+
                     if ((step + 1) % self.config["gradient_accumulation_steps"]) == 0:
                         optimizer.step()
                         optimizer.zero_grad(set_to_none=True)
@@ -78,13 +101,13 @@ class GRPOTrainer:
                     logger.log_train(
                         {
                             "step": step,
-                            "loss": float(loss.detach().cpu()),
+                            "loss": sum(chunk_losses) / max(len(chunk_losses), 1),
                             "train_reward": float(rewards.mean().item()),
                             "group_reward_std": float(group_std.mean().item()),
-                            "clip_fraction": metrics["clip_fraction"],
-                            "kl_mean": metrics["kl_mean"],
-                            "entropy_mean": metrics["entropy_mean"],
-                            "ratio_max": metrics["ratio_max"],
+                            "clip_fraction": sum(item["clip_fraction"] for item in chunk_metrics) / max(len(chunk_metrics), 1),
+                            "kl_mean": sum(item["kl_mean"] for item in chunk_metrics) / max(len(chunk_metrics), 1),
+                            "entropy_mean": sum(item["entropy_mean"] for item in chunk_metrics) / max(len(chunk_metrics), 1),
+                            "ratio_max": max(item["ratio_max"] for item in chunk_metrics),
                             "response_length": float(response_length.mean().item()),
                             "gpu_hours": elapsed_sec / 3600.0,
                             **get_system_metrics(),

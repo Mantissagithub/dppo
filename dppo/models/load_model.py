@@ -24,8 +24,9 @@ def load_model_and_tokenizer(config, model_path=None):
     tokenizer.padding_side = "left"
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        torch_dtype=torch_dtype,
+        dtype=torch_dtype,
         trust_remote_code=True,
     )
-    model.config.use_cache = True
+    model.config.use_cache = False
+    model.gradient_checkpointing_enable()
     return model, tokenizer, accelerator, torch_dtype

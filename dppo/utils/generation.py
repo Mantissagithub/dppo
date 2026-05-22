@@ -30,6 +30,7 @@ def generate_batch(model, tokenizer, accelerator, prompts, config):
     rollout = generate_text(model, tokenizer, accelerator, prompts, config)
     sequences = rollout["sequences"]
     attention_mask = (sequences != tokenizer.pad_token_id).long()
+    store_logits = config.get("store_rollout_logits", False)
     with torch.no_grad():
         outputs = model(input_ids=sequences, attention_mask=attention_mask)
     labels = sequences[:, 1:]
@@ -64,10 +65,11 @@ def generate_batch(model, tokenizer, accelerator, prompts, config):
             "entropy": entropy,
             "token_mask": token_mask,
             "response_length": response_length,
-            "logits": shifted_logits,
             "gather_logprobs": gather_logprobs,
             "entropy_from_logits": entropy_from_logits,
             "slice_logits": slice_logits,
         }
     )
+    if store_logits:
+        rollout["logits"] = shifted_logits
     return rollout
