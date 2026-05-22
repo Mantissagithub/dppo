@@ -27,8 +27,14 @@ def prepared_data_dir(root):
     return root / "data" / "processed"
 
 
+def normalize_dataset_name(dataset_name):
+    if dataset_name == "gsm8k":
+        return "openai/gsm8k"
+    return dataset_name
+
+
 def prepare_gsm8k_subsets(root, train_samples, eval_samples, seed, dataset_name, dataset_config):
-    dataset = load_dataset(dataset_name, dataset_config)
+    dataset = load_dataset(normalize_dataset_name(dataset_name), dataset_config)
     train_split = dataset["train"].shuffle(seed=seed).select(range(train_samples))
     eval_split = dataset["test"].shuffle(seed=seed).select(range(eval_samples))
     output_dir = prepared_data_dir(root)
@@ -58,7 +64,7 @@ def load_prepared_split(root, split, samples, seed=42):
     path = prepared_data_dir(root) / f"gsm8k_{split}_{samples}_{seed}.jsonl"
     if not path.exists():
         config = {"train": samples, "eval": samples}
-        prepare_gsm8k_subsets(root, config["train"], config["eval"], seed, "gsm8k", "main")
+        prepare_gsm8k_subsets(root, config["train"], config["eval"], seed, "openai/gsm8k", "main")
     items = []
     with open(path, "r", encoding="utf-8") as handle:
         for line in handle:

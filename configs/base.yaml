@@ -1,5 +1,5 @@
 model_name: Qwen/Qwen2.5-0.5B-Instruct
-dataset_name: gsm8k
+dataset_name: openai/gsm8k
 dataset_config: main
 train_samples: 400
 eval_samples: 100
