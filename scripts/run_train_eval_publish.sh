@@ -23,8 +23,49 @@ run_and_log() {
   "$@" 2>&1 | tee -a "$PIPELINE_LOG"
 }
 
+get_env_value() {
+  local key="$1"
+  python - "$ROOT/.env" "$key" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+key = sys.argv[2]
+if not path.exists():
+    raise SystemExit(0)
+for raw_line in path.read_text(encoding="utf-8").splitlines():
+    line = raw_line.strip()
+    if not line or line.startswith("#") or "=" not in line:
+        continue
+    lhs, rhs = line.split("=", 1)
+    if lhs.strip() == key:
+        print(rhs.strip())
+        break
+PY
+}
+
 have_hf_creds() {
   [[ -f .env ]] && grep -q '^HF_USERNAME=' .env && grep -q '^HF_TOKEN=' .env
+}
+
+git_push_with_env_token() {
+  local github_token=""
+  local auth_header=""
+  github_token="$(get_env_value GITHUB_TOKEN)"
+  if [[ -z "$github_token" ]]; then
+    git push
+    return
+  fi
+  auth_header="$(python - "$github_token" <<'PY'
+import base64
+import sys
+
+token = sys.argv[1]
+payload = f"x-access-token:{token}".encode("utf-8")
+print("AUTHORIZATION: basic " + base64.b64encode(payload).decode("ascii"))
+PY
+)"
+  git -c "http.https://github.com/.extraheader=${auth_header}" push
 }
 
 clear_run_outputs() {
@@ -116,7 +157,7 @@ log "plot outputs"
 run_and_log python scripts/plot_results.py --outputs-root outputs --save-dir outputs/plots --runs "${RUNS[@]}"
 
 log "attempt git push"
-if git push 2>&1 | tee -a "$PIPELINE_LOG"; then
+if git_push_with_env_token 2>&1 | tee -a "$PIPELINE_LOG"; then
   log "git push succeeded"
 else
   log "git push failed, moving to next step"
