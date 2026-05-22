@@ -220,18 +220,9 @@ def main():
         raise SystemExit("no run metrics found")
 
     written = []
-    summary_path = save_dir / "summary.png"
-    plot_summary(runs, summary_path)
-    written.append(summary_path)
-
     train_specs = [
         ("train_reward", "train reward", "train_reward.png"),
-        ("kl_mean", "kl mean", "kl_mean.png"),
-        ("mean_divergence", "mean divergence", "mean_divergence.png"),
         ("entropy_mean", "entropy mean", "entropy_mean.png"),
-        ("ratio_max", "ratio max", "ratio_max.png"),
-        ("clip_fraction", "clip fraction", "clip_fraction.png"),
-        ("mask_fraction", "mask fraction", "mask_fraction.png"),
         ("response_length", "response length", "response_length.png"),
         ("gpu_hours", "gpu hours", "gpu_hours.png"),
     ]
@@ -252,6 +243,11 @@ def main():
     system_path = save_dir / "system_usage.png"
     if plot_system_usage(runs, system_path):
         written.append(system_path)
+
+    keep_names = {path.name for path in written}
+    for existing in save_dir.glob("*.png"):
+        if existing.name not in keep_names:
+            existing.unlink()
 
     for path in written:
         print(f"wrote {path}")

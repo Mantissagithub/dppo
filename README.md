@@ -1,16 +1,20 @@
 # dppo
 
-This is a small controlled RL post-training experiment on a GSM8K subset. It compares PPO, GRPO, and a simple DPPO-topk variant on one GPU. It is not a full benchmark and it is not a distributed training stack.
+This is a small controlled RL post-training experiment on a GSM8K subset. It compares PPO, GRPO, DPPO-topk, and DPPO-full on one GPU. It is not a full benchmark and it is not a distributed training stack.
+
+> this repo is meant to be easy to inspect end to end: small dataset slice, one base model, rule-based reward, tracked metrics, and pushed model artifacts.
+
+> the DPPO setup here is inspired by the paper [DPPO: divergence-constrained policy optimization](https://arxiv.org/abs/2602.04879), but the code here is intentionally small and practical rather than a full reproduction.
 
 ## What is here
 
 - `scripts/prepare_gsm8k.py` writes the default `400/100` GSM8K subset to `data/processed/`.
 - `scripts/train_ppo.py` runs a minimal reward-only PPO loop.
 - `scripts/train_grpo.py` runs grouped sampling with group-relative normalized advantages.
-- `scripts/train_dppo.py` runs PPO-style updates with a top-k divergence mask.
+- `scripts/train_dppo.py` runs PPO-style updates with either top-k divergence masking or full-vocab divergence masking.
 - `scripts/eval_model.py` evaluates a saved checkpoint on the prepared eval split.
-- `scripts/run_all_5hr.sh` runs smoke checks first, then time-limited PPO, GRPO, and DPPO runs.
-- `scripts/plot_results.py` writes a summary figure plus per-metric PNGs from logged metrics.
+- `scripts/run_train_eval_publish.sh` runs train, eval, cleanup, plotting, git push, and HF model-card publish in one flow.
+- `scripts/plot_results.py` writes only the informative per-metric PNGs from logged metrics.
 
 ## Setup
 
@@ -20,7 +24,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-`scripts/run_all_5hr.sh` asks once for `HF_USERNAME` and `HF_TOKEN`, writes them to `.env`, and reuses them for later runs.
+The scripts use `.env` for `HF_USERNAME`, `HF_TOKEN`, and optionally `GITHUB_TOKEN` and `HF_COLLECTION_URL`.
 
 ## Expected hardware
 
@@ -30,13 +34,10 @@ This code expects one CUDA GPU. The target is one L40S 48GB card. Training scrip
 
 ```bash
 python scripts/prepare_gsm8k.py --config configs/base.yaml
-python scripts/train_ppo.py --config configs/base.yaml --config configs/ppo.yaml --config configs/smoke.yaml
-python scripts/train_grpo.py --config configs/base.yaml --config configs/grpo.yaml --config configs/smoke.yaml
-python scripts/train_dppo.py --config configs/base.yaml --config configs/dppo_topk.yaml --config configs/smoke.yaml
 python scripts/plot_results.py --outputs-root outputs --save-dir outputs/plots
 ```
 
-single-line dppo train:
+single-line dppo top-k train:
 
 ```bash
 python scripts/train_dppo.py --config configs/base.yaml --config configs/dppo_topk.yaml --output-dir outputs/dppo_topk --run-name dppo-topk
@@ -53,6 +54,43 @@ single-line eval:
 ```bash
 python scripts/eval_model.py --config configs/base.yaml --model-path outputs/dppo_topk/final_model --output-dir outputs/dppo_topk_eval
 ```
+
+full pipeline:
+
+```bash
+bash scripts/run_train_eval_publish.sh
+```
+
+## Hub Models
+
+- 🤗 [ppo](https://huggingface.co/Pradheep1647/qwen2.5-0.5b-instruct-openai-gsm8k-ppo)
+- 🤗 [grpo](https://huggingface.co/Pradheep1647/qwen2.5-0.5b-instruct-openai-gsm8k-grpo)
+- 🤗 [dppo-topk](https://huggingface.co/Pradheep1647/qwen2.5-0.5b-instruct-openai-gsm8k-dppo-topk)
+- 🤗 [dppo-full](https://huggingface.co/Pradheep1647/qwen2.5-0.5b-instruct-openai-gsm8k-dppo-full)
+
+## Plots
+
+> these are the plots worth looking at from the current runs. the noisier or degenerate policy-movement plots were removed from the default README surface because they were not adding useful signal.
+
+<table>
+  <tr>
+    <td><img src="outputs/plots/train_reward.png" alt="train reward" width="100%"></td>
+    <td><img src="outputs/plots/eval_acc.png" alt="eval acc" width="100%"></td>
+  </tr>
+  <tr>
+    <td><img src="outputs/plots/eval_reward.png" alt="eval reward" width="100%"></td>
+    <td><img src="outputs/plots/entropy_mean.png" alt="entropy mean" width="100%"></td>
+  </tr>
+  <tr>
+    <td><img src="outputs/plots/response_length.png" alt="response length" width="100%"></td>
+    <td><img src="outputs/plots/gpu_hours.png" alt="gpu hours" width="100%"></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="outputs/plots/system_usage.png" alt="system usage" width="100%"></td>
+  </tr>
+</table>
+
+> train reward, eval accuracy, and eval reward are the main outcome metrics. response length and entropy help show generation behavior, while gpu-hours and system-usage plots show the practical runtime cost of each method.
 
 ## Reward
 
@@ -72,5 +110,6 @@ The prompt always asks for step-by-step work and a final answer after `####`.
 - Final checkpoints are pushed to repos named like `hf-username/qwen2.5-0.5b-instruct-gsm8k-ppo`.
 - Each run also writes `outputs/<algo>/training.log` as JSONL, logs scalars to TensorBoard under `outputs/<algo>/tb/`, and uploads `training.log` with the pushed model.
 - `scripts/pull_model.py` downloads a pushed Hub model repo using `HF_USERNAME` and `HF_TOKEN` from `.env`.
-- `scripts/publish_model_card.py` pulls the Hub repo, plots from `training.log`, rewrites the autogenerated model card to a minimal version, and uploads the new `README.md` plus plot.
-- `scripts/plot_results.py` now includes `dppo_full` by default, reads `training.log` when present, uses final-value bar charts for eval metrics, and writes separate PNGs like `train_reward.png`, `eval_acc.png`, `eval_reward.png`, `kl_mean.png`, `mean_divergence.png`, `entropy_mean.png`, `ratio_max.png`, `clip_fraction.png`, `mask_fraction.png`, `response_length.png`, `gpu_hours.png`, and `system_usage.png`.
+- `scripts/publish_model_card.py` pulls the Hub repo, plots only the useful tracked metrics from `training.log`, rewrites the autogenerated model card to a minimal tagged version, and uploads the new `README.md` plus plot.
+- if you later create an HF collection, pass `--collection-url ...` or set `HF_COLLECTION_URL` and it will be linked from the model card.
+- `scripts/plot_results.py` now includes `dppo_full` by default, reads `training.log` when present, and keeps only the informative default plots: `train_reward.png`, `eval_acc.png`, `eval_reward.png`, `entropy_mean.png`, `response_length.png`, `gpu_hours.png`, and `system_usage.png`.

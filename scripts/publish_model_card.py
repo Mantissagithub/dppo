@@ -1,6 +1,7 @@
 from pathlib import Path
 import argparse
 import json
+import os
 import sys
 import tempfile
 
@@ -37,34 +38,35 @@ def load_training_log(path):
 def plot_training_log(df, save_path):
     train_df = df[df["phase"] == "train"].copy()
     eval_df = df[df["phase"] == "eval"].copy()
-    fig, axes = plt.subplots(2, 3, figsize=(15, 8))
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
 
     if not train_df.empty and "train_reward" in train_df:
-        axes[0, 0].plot(train_df["step"], train_df["train_reward"])
-    if not eval_df.empty and "eval_acc" in eval_df:
-        axes[0, 1].plot(eval_df["step"], eval_df["eval_acc"])
-    if not train_df.empty and "kl_mean" in train_df:
-        axes[0, 2].plot(train_df["step"], train_df["kl_mean"], label="kl_mean")
-    if not train_df.empty and "mean_divergence" in train_df:
-        axes[0, 2].plot(train_df["step"], train_df["mean_divergence"], label="mean_divergence")
+        axes[0, 0].plot(train_df["step"], train_df["train_reward"], linewidth=2)
     if not train_df.empty and "entropy_mean" in train_df:
-        axes[1, 0].plot(train_df["step"], train_df["entropy_mean"])
-    if not train_df.empty:
-        if "clip_fraction" in train_df:
-            axes[1, 1].plot(train_df["step"], train_df["clip_fraction"], label="clip_fraction")
-        if "mask_fraction" in train_df:
-            axes[1, 1].plot(train_df["step"], train_df["mask_fraction"], label="mask_fraction")
+        axes[0, 1].plot(train_df["step"], train_df["entropy_mean"], linewidth=2)
     if not train_df.empty and "response_length" in train_df:
-        axes[1, 2].plot(train_df["step"], train_df["response_length"], label="response_length")
+        axes[1, 0].plot(train_df["step"], train_df["response_length"], label="response_length", linewidth=2)
     if not train_df.empty and "gpu_hours" in train_df:
-        axes[1, 2].plot(train_df["step"], train_df["gpu_hours"], label="gpu_hours")
+        axes[1, 0].plot(train_df["step"], train_df["gpu_hours"], label="gpu_hours", linewidth=2)
+    if not eval_df.empty:
+        final_eval = eval_df.iloc[-1].to_dict()
+        metric_names = []
+        metric_values = []
+        if "eval_acc" in final_eval:
+            metric_names.append("eval_acc")
+            metric_values.append(float(final_eval["eval_acc"]))
+        if "eval_reward" in final_eval:
+            metric_names.append("eval_reward")
+            metric_values.append(float(final_eval["eval_reward"]))
+        if metric_values:
+            axes[1, 1].bar(metric_names, metric_values)
+            for idx, value in enumerate(metric_values):
+                axes[1, 1].text(idx, value, f"{value:.4f}", ha="center", va="bottom", fontsize=9)
 
     axes[0, 0].set_title("train reward")
-    axes[0, 1].set_title("eval acc")
-    axes[0, 2].set_title("kl / divergence")
-    axes[1, 0].set_title("entropy")
-    axes[1, 1].set_title("clip / mask fraction")
-    axes[1, 2].set_title("response length / gpu hours")
+    axes[0, 1].set_title("entropy mean")
+    axes[1, 0].set_title("response length / gpu hours")
+    axes[1, 1].set_title("final eval metrics")
 
     for axis in axes.flat:
         axis.set_xlabel("step")
@@ -80,19 +82,54 @@ def plot_training_log(df, save_path):
 
 def infer_method(repo_id):
     name = repo_id.split("/")[-1]
-    for method in ["dppo-topk", "grpo", "ppo"]:
+    for method in ["dppo-full", "dppo-topk", "grpo", "ppo"]:
         if name.endswith(method):
             return method
     return name
 
 
-def build_model_card(repo_id, config, df, plot_name):
+def method_tags(method):
+    tags = ["transformers", "text-generation", "gsm8k", "rl-post-training", "single-gpu"]
+    if method.startswith("dppo"):
+        tags.append("dppo")
+    else:
+        tags.append(method)
+    if method == "dppo-topk":
+        tags.append("topk-divergence")
+    if method == "dppo-full":
+        tags.append("full-divergence")
+    return tags
+
+
+def build_model_card(repo_id, config, df, plot_name, collection_url=None):
     train_df = df[df["phase"] == "train"].copy()
     eval_df = df[df["phase"] == "eval"].copy()
     final_train = train_df.iloc[-1].to_dict() if not train_df.empty else {}
     final_eval = eval_df.iloc[-1].to_dict() if not eval_df.empty else {}
     method = infer_method(repo_id)
+    tags = method_tags(method)
+    frontmatter = [
+        "---",
+        "library_name: transformers",
+        "pipeline_tag: text-generation",
+        f"base_model: {config['model_name']}",
+        "datasets:",
+        f"  - {config['dataset_name']}",
+        "tags:",
+    ]
+    for tag in tags:
+        frontmatter.append(f"  - {tag}")
+    if collection_url:
+        frontmatter.extend(
+            [
+                "model-index:",
+                "  - name: training collection",
+                "    results: []",
+            ]
+        )
+    frontmatter.append("---")
     lines = [
+        *frontmatter,
         f"# {repo_id}",
         "",
         "small single-gpu rl post-training run on a gsm8k subset.",
@@ -104,6 +141,15 @@ def build_model_card(repo_id, config, df, plot_name):
         f"- dataset: `{config['dataset_name']}` config `{config['dataset_config']}`",
         f"- train / eval samples: `{config['train_samples']}` / `{config['eval_samples']}`",
         f"- prompt format: step-by-step reasoning with final answer after `####`",
+    ]
+    if collection_url:
+        lines.extend(
+            [
+                f"- collection: {collection_url}",
+            ]
+        )
+    lines.extend(
+        [
         "",
         "## reward",
         "",
@@ -125,7 +171,7 @@ def build_model_card(repo_id, config, df, plot_name):
         "## artifacts",
         "",
         f"- training log: [`training.log`](./training.log)",
-        f"- plots: ![{plot_name}](./{plot_name})",
+        f"- plot: ![{plot_name}](./{plot_name})",
         "",
         "## usage",
         "",
@@ -141,7 +187,7 @@ def build_model_card(repo_id, config, df, plot_name):
         "",
         "- this is a small controlled experiment, not a benchmark",
         "- see `training.log` for the full tracked metrics over time",
-    ]
+    ])
     return "\n".join(lines) + "\n"
 
 
@@ -156,6 +202,7 @@ def main():
     parser.add_argument("--run-name", required=True)
     parser.add_argument("--training-log")
     parser.add_argument("--plot-name", default="training_curves.png")
+    parser.add_argument("--collection-url")
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -171,6 +218,7 @@ def main():
     token = get_hf_token(ROOT)
     if not token:
         raise SystemExit("missing HF_TOKEN in .env")
+    collection_url = args.collection_url or os.environ.get("HF_COLLECTION_URL")
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         work_dir = Path(tmp_dir) / "repo"
@@ -184,7 +232,7 @@ def main():
         plot_path = work_dir / args.plot_name
         plot_training_log(df, plot_path)
         readme_path = work_dir / "README.md"
-        readme_path.write_text(build_model_card(repo_id, config, df, args.plot_name), encoding="utf-8")
+        readme_path.write_text(build_model_card(repo_id, config, df, args.plot_name, collection_url=collection_url), encoding="utf-8")
 
         api = HfApi(token=token)
         api.upload_file(
