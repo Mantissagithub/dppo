@@ -1,2 +1,55 @@
 # dppo
-implementing dppo on a small alignment stack to understand the divergence dynamics better.
+
+This is a small controlled RL post-training experiment on a GSM8K subset. It compares PPO, GRPO, and a simple DPPO-topk variant on one GPU. It is not a full benchmark and it is not a distributed training stack.
+
+## What is here
+
+- `scripts/prepare_gsm8k.py` writes the default `400/100` GSM8K subset to `data/processed/`.
+- `scripts/train_ppo.py` runs a minimal reward-only PPO loop.
+- `scripts/train_grpo.py` runs grouped sampling with group-relative normalized advantages.
+- `scripts/train_dppo.py` runs PPO-style updates with a top-k divergence mask.
+- `scripts/eval_model.py` evaluates a saved checkpoint on the prepared eval split.
+- `scripts/run_all_5hr.sh` runs smoke checks first, then time-limited PPO, GRPO, and DPPO runs.
+- `scripts/plot_results.py` writes a summary figure from logged metrics.
+
+## Setup
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+`scripts/run_all_5hr.sh` asks once for `HF_USERNAME` and `HF_TOKEN`, writes them to `.env`, and reuses them for later runs.
+
+## Expected hardware
+
+This code expects one CUDA GPU. The target is one L40S 48GB card. Training scripts stop early with a short message if CUDA is missing.
+
+## Quick run
+
+```bash
+python scripts/prepare_gsm8k.py --config configs/base.yaml
+python scripts/train_ppo.py --config configs/base.yaml --config configs/ppo.yaml --config configs/smoke.yaml
+python scripts/train_grpo.py --config configs/base.yaml --config configs/grpo.yaml --config configs/smoke.yaml
+python scripts/train_dppo.py --config configs/base.yaml --config configs/dppo_topk.yaml --config configs/smoke.yaml
+python scripts/plot_results.py --outputs-root outputs --save-path outputs/summary.png
+```
+
+## Reward
+
+- `+1.0` if the final numeric answer matches GSM8K.
+- `+0.1` if the output has a parseable final answer after `####`.
+- `0.0` otherwise.
+
+The prompt always asks for step-by-step work and a final answer after `####`.
+
+## Notes
+
+- The trainers use policy-gradient style updates on generated tokens only.
+- PPO uses clipped ratio updates and logs `kl_mean`, `entropy_mean`, and `clip_fraction`.
+- GRPO samples four completions per prompt and normalizes rewards within each prompt group.
+- DPPO-topk blocks updates when the sampled-token move and the top-k distribution move point in the same risky direction past the divergence threshold.
+- Logs are written to both `jsonl` and `csv` under `outputs/<algo>/`.
+- Final checkpoints are pushed to repos named like `hf-username/qwen2.5-0.5b-instruct-gsm8k-ppo`.
+- Each run also writes `outputs/<algo>/training.log` as JSONL, logs scalars to TensorBoard under `outputs/<algo>/tb/`, and uploads `training.log` with the pushed model.

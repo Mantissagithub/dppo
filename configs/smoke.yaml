@@ -1,0 +1,5 @@
+train_samples: 32
+eval_samples: 16
+max_new_tokens: 128
+batch_size: 2
+gradient_accumulation_steps: 2

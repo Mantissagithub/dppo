@@ -1,0 +1,10 @@
+torch
+transformers
+huggingface_hub
+datasets
+accelerate
+pyyaml
+pandas
+matplotlib
+tqdm
+tensorboard

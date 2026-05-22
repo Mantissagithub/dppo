@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dppo"
+version = "0.1.0"
+description = "Small single-GPU PPO, GRPO, and DPPO-topk GSM8K experiment."
+requires-python = ">=3.10"
+dependencies = [
+  "torch",
+  "transformers",
+  "huggingface_hub",
+  "datasets",
+  "accelerate",
+  "pyyaml",
+  "pandas",
+  "matplotlib",
+  "tqdm",
+  "tensorboard",
+]
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+include = ["dppo*"]
