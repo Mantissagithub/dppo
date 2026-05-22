@@ -1,0 +1,1 @@
+{"eval_acc": 0.11, "eval_parse_rate": 1.0, "eval_reward": 0.1990000000000002, "step": 100, "gpu_hours": 0.15760606759124332, "cpu_load_1m": 1.0, "cpu_rss_gb": 0.0018737874925136566, "gpu_memory_allocated_gb": 6.315505504608154, "gpu_memory_reserved_gb": 41.16015625, "gpu_memory_peak_gb": 12.696959972381592}

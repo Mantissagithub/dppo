@@ -1,0 +1,2 @@
+eval_acc,eval_parse_rate,eval_reward,step,gpu_hours,cpu_load_1m,cpu_rss_gb,gpu_memory_allocated_gb,gpu_memory_reserved_gb,gpu_memory_peak_gb
+0.11,1.0,0.1990000000000002,100,0.1541429681248135,1.0,0.0018739737570285797,6.315505504608154,37.478515625,11.709330081939697

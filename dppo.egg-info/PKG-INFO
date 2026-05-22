@@ -1,0 +1,15 @@
+Metadata-Version: 2.4
+Name: dppo
+Version: 0.1.0
+Summary: Small single-GPU PPO, GRPO, and DPPO-topk GSM8K experiment.
+Requires-Python: >=3.10
+Requires-Dist: torch
+Requires-Dist: transformers
+Requires-Dist: huggingface_hub
+Requires-Dist: datasets
+Requires-Dist: accelerate
+Requires-Dist: pyyaml
+Requires-Dist: pandas
+Requires-Dist: matplotlib
+Requires-Dist: tqdm
+Requires-Dist: tensorboard
