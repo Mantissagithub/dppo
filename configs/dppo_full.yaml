@@ -1,6 +1,5 @@
 clip_range: 0.2
 ppo_epochs: 1
-top_k: 50
 divergence: tv
-divergence_mode: topk
+divergence_mode: full
 delta: 0.05

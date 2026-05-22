@@ -45,8 +45,8 @@ def plot_training_log(df, save_path):
         axes[0, 1].plot(eval_df["step"], eval_df["eval_acc"])
     if not train_df.empty and "kl_mean" in train_df:
         axes[0, 2].plot(train_df["step"], train_df["kl_mean"], label="kl_mean")
-    if not train_df.empty and "mean_topk_divergence" in train_df:
-        axes[0, 2].plot(train_df["step"], train_df["mean_topk_divergence"], label="mean_topk_divergence")
+    if not train_df.empty and "mean_divergence" in train_df:
+        axes[0, 2].plot(train_df["step"], train_df["mean_divergence"], label="mean_divergence")
     if not train_df.empty and "entropy_mean" in train_df:
         axes[1, 0].plot(train_df["step"], train_df["entropy_mean"])
     if not train_df.empty:

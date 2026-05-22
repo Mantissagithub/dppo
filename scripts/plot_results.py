@@ -38,8 +38,8 @@ def main():
         if not train_df.empty:
             if "kl_mean" in train_df:
                 axes[1, 0].plot(train_df["step"], train_df["kl_mean"], label=f"{algo}_kl")
-            if "mean_topk_divergence" in train_df:
-                axes[1, 0].plot(train_df["step"], train_df["mean_topk_divergence"], label=f"{algo}_div")
+            if "mean_divergence" in train_df:
+                axes[1, 0].plot(train_df["step"], train_df["mean_divergence"], label=f"{algo}_div")
             if "clip_fraction" in train_df:
                 axes[1, 1].plot(train_df["step"], train_df["clip_fraction"], label=f"{algo}_clip")
             if "mask_fraction" in train_df:

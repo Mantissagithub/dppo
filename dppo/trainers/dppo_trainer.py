@@ -35,9 +35,10 @@ class DPPOTrainer:
 
         step = 0
         timer = Timer()
+        divergence_mode = self.config.get("divergence_mode", "topk")
         model.train()
         for _ in range(self.config["num_epochs"]):
-            for start in tqdm(range(0, len(train_examples), self.config["batch_size"]), desc="dppo_topk"):
+            for start in tqdm(range(0, len(train_examples), self.config["batch_size"]), desc=f"dppo_{divergence_mode}"):
                 batch = train_examples[start : start + self.config["batch_size"]]
                 rollout = generate_batch(model, tokenizer, accelerator, [item["prompt"] for item in batch], self.config)
                 rewards = torch.tensor(
@@ -62,9 +63,10 @@ class DPPOTrainer:
                         new_logits=new_logits,
                         advantages=advantages,
                         token_mask=rollout["token_mask"],
-                        top_k=self.config["top_k"],
+                        top_k=self.config.get("top_k", 50),
                         delta=self.config["delta"],
                         entropy=entropy,
+                        divergence_mode=divergence_mode,
                     )
                     accelerator.backward(loss / self.config["gradient_accumulation_steps"])
                     if ((step + 1) % self.config["gradient_accumulation_steps"]) == 0:
@@ -77,7 +79,7 @@ class DPPOTrainer:
                             "step": step,
                             "loss": float(loss.detach().cpu()),
                             "train_reward": float(rewards.mean().item()),
-                            "mean_topk_divergence": metrics["mean_topk_divergence"],
+                            "mean_divergence": metrics["mean_divergence"],
                             "mask_fraction": metrics["mask_fraction"],
                             "kl_mean": metrics["kl_mean"],
                             "entropy_mean": metrics["entropy_mean"],

@@ -42,6 +42,12 @@ single-line dppo train:
 python scripts/train_dppo.py --config configs/base.yaml --config configs/dppo_topk.yaml --output-dir outputs/dppo_topk --run-name dppo-topk
 ```
 
+single-line dppo full-divergence train:
+
+```bash
+python scripts/train_dppo.py --config configs/base.yaml --config configs/dppo_full.yaml --output-dir outputs/dppo_full --run-name dppo-full
+```
+
 single-line eval:
 
 ```bash
@@ -61,7 +67,7 @@ The prompt always asks for step-by-step work and a final answer after `####`.
 - The trainers use policy-gradient style updates on generated tokens only.
 - PPO uses clipped ratio updates and logs `kl_mean`, `entropy_mean`, and `clip_fraction`.
 - GRPO samples four completions per prompt and normalizes rewards within each prompt group.
-- DPPO-topk blocks updates when the sampled-token move and the top-k distribution move point in the same risky direction past the divergence threshold.
+- DPPO can run either `topk` divergence masking or full-vocab TV divergence masking.
 - Logs are written to both `jsonl` and `csv` under `outputs/<algo>/`.
 - Final checkpoints are pushed to repos named like `hf-username/qwen2.5-0.5b-instruct-gsm8k-ppo`.
 - Each run also writes `outputs/<algo>/training.log` as JSONL, logs scalars to TensorBoard under `outputs/<algo>/tb/`, and uploads `training.log` with the pushed model.
