@@ -6,60 +6,13 @@ This is a small controlled RL post-training experiment on a GSM8K subset. It com
 
 > the DPPO setup here is inspired by the paper [DPPO: divergence-constrained policy optimization](https://arxiv.org/abs/2602.04879), but the code here is intentionally small and practical rather than a full reproduction.
 
-## What is here
+> what clicked for DPPO here: it stays inside the same PPO-style rollout/update loop, but blocks updates when the policy distribution moves too far in the reward-improving direction. that makes the comparison easy to inspect because reward, prompts, base model, and logging stay shared across PPO, GRPO, DPPO-topk, and DPPO-full.
 
-- `scripts/prepare_gsm8k.py` writes the default `400/100` GSM8K subset to `data/processed/`.
-- `scripts/train_ppo.py` runs a minimal reward-only PPO loop.
-- `scripts/train_grpo.py` runs grouped sampling with group-relative normalized advantages.
-- `scripts/train_dppo.py` runs PPO-style updates with either top-k divergence masking or full-vocab divergence masking.
-- `scripts/eval_model.py` evaluates a saved checkpoint on the prepared eval split.
-- `scripts/run_train_eval_publish.sh` runs train, eval, cleanup, plotting, git push, and HF model-card publish in one flow.
-- `scripts/plot_results.py` writes only the informative per-metric PNGs from logged metrics.
+> on this small 400-prompt run, DPPO is best read as matching the baseline performance envelope rather than proving a clean win. the useful signal is that the divergence mask does not need a new training stack to behave competitively under the same budget.
 
-## Setup
+> if this is scaled, the thing to watch is whether DPPO keeps policy movement steadier while reward improves. full-vocab DPPO is the cleaner reference, but top-k DPPO is the practical path because it keeps the divergence check cheap enough for larger models and longer runs.
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-The scripts use `.env` for `HF_USERNAME`, `HF_TOKEN`, and optionally `GITHUB_TOKEN` and `HF_COLLECTION_URL`.
-
-## Expected hardware
-
-This code expects one CUDA GPU. The target is one L40S 48GB card. Training scripts stop early with a short message if CUDA is missing.
-
-## Quick run
-
-```bash
-python scripts/prepare_gsm8k.py --config configs/base.yaml
-python scripts/plot_results.py --outputs-root outputs --save-dir outputs/plots
-```
-
-single-line dppo top-k train:
-
-```bash
-python scripts/train_dppo.py --config configs/base.yaml --config configs/dppo_topk.yaml --output-dir outputs/dppo_topk --run-name dppo-topk
-```
-
-single-line dppo full-divergence train:
-
-```bash
-python scripts/train_dppo.py --config configs/base.yaml --config configs/dppo_full.yaml --output-dir outputs/dppo_full --run-name dppo-full
-```
-
-single-line eval:
-
-```bash
-python scripts/eval_model.py --config configs/base.yaml --model-path outputs/dppo_topk/final_model --output-dir outputs/dppo_topk_eval
-```
-
-full pipeline:
-
-```bash
-bash scripts/run_train_eval_publish.sh
-```
+> for the full train -> eval -> cleanup -> plot -> git push -> hf publish flow, check `scripts/run_train_eval_publish.sh`.
 
 ## Hub Models
 
