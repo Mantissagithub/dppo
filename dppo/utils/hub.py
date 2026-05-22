@@ -1,7 +1,7 @@
 from pathlib import Path
 import re
 
-from huggingface_hub import HfApi, create_repo
+from huggingface_hub import HfApi, create_repo, snapshot_download
 
 
 def load_env_file(path: Path):
@@ -33,6 +33,28 @@ def build_repo_id(config):
     dataset_name = slugify(config["dataset_name"])
     run_name = slugify(config["run_name"])
     return f"{username}/{base_model}-{dataset_name}-{run_name}"
+
+
+def get_hf_token(repo_root):
+    env = load_env_file(Path(repo_root) / ".env")
+    return env.get("HF_TOKEN")
+
+
+def get_hf_username(repo_root):
+    env = load_env_file(Path(repo_root) / ".env")
+    return env.get("HF_USERNAME")
+
+
+def build_repo_id_from_parts(repo_root, model_name, dataset_name, run_name):
+    username = get_hf_username(repo_root)
+    if not username:
+        return None
+    return f"{username}/{slugify(model_name.split('/')[-1])}-{slugify(dataset_name)}-{slugify(run_name)}"
+
+
+def download_model_repo(repo_id, repo_root, local_dir):
+    token = get_hf_token(repo_root)
+    return snapshot_download(repo_id=repo_id, local_dir=str(local_dir), token=token)
 
 
 def save_and_maybe_push(model, tokenizer, accelerator, output_dir: Path, config):
